@@ -1,5 +1,5 @@
 BEAT_NAME=nessusbeat
-BEAT_PATH=github.com/darvid/nessusbeat
+BEAT_PATH=github.com/fatalglitch/nessusbeat
 BEAT_GOPATH=$(firstword $(subst :, ,${GOPATH}))
 BEAT_URL=https://${BEAT_PATH}
 SYSTEM_TESTS=false

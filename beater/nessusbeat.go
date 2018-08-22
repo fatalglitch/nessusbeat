@@ -18,7 +18,7 @@ import (
 	"github.com/attwad/nessie"
 	"github.com/fsnotify/fsnotify"
 
-	"github.com/darvid/nessusbeat/config"
+	"github.com/fatalglitch/nessusbeat/config"
 )
 
 type Nessusbeat struct {

@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/darvid/nessusbeat/cmd"
+	"github.com/fatalglitch/nessusbeat/cmd"
 )
 
 func main() {
