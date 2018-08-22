@@ -10,7 +10,7 @@ filebeat.prospectors:
   # Paths that should be crawled and fetched
   {% if path %}paths:
     - {{ path }}{% endif %}
-  {% if recursive_glob %}recursive_glob.enabled: true
+  {% if disable_recursive_glob %}recursive_glob.enabled: false
   {% endif %}
   # Type of the files. Annotated in every documented
   scan_frequency: {{scan_frequency | default("0.1s") }}
@@ -89,23 +89,35 @@ filebeat.prospectors:
 {{prospector_raw}}
 {% endif %}
 
-filebeat.spool_size:
 filebeat.shutdown_timeout: {{ shutdown_timeout|default(0) }}
-filebeat.idle_timeout: 0.1s
 {% if not skip_registry_config %}
 filebeat.registry_file: {{ beat.working_dir + '/' }}{{ registryFile|default("registry")}}
 {%endif%}
-filebeat.publish_async: {{publish_async}}
 
 {% if reload or reload_path -%}
-filebeat.config.prospectors:
-  enabled: true
+filebeat.config.{{ reload_type|default("prospectors") }}:
   path: {{ reload_path }}
   {% if reload  -%}
   reload.period: 1s
-  reload.enabled: true
+  reload.enabled: {{ reload|default("false") }}
   {% endif -%}
 {% endif -%}
+
+#============================== Autodiscover ==================================
+
+{% if autodiscover %}
+filebeat.autodiscover:
+  providers:
+  {%- for provider, settings in autodiscover.items() %}
+  - type: {{provider}}
+    {%- if settings %}
+    {%- for k, v in settings.items() %}
+    {{k}}:
+      {{v | default([])}}
+    {%- endfor %}
+    {%- endif %}
+  {%- endfor %}
+{% endif %}
 
 #================================ General =====================================
 
@@ -136,6 +148,11 @@ geoip:
   ]
 {%- endif %}
 
+{% if setup_template_name %}
+setup.template.name: setup_template_name
+setup.template.pattern: setup_template_pattern
+{%- endif %}
+
 {%- if processors %}
 
 #================================ Filters =====================================
@@ -155,6 +172,13 @@ processors:
 
 {%- endif %}
 
+#================================ Queue =====================================
+
+queue.mem:
+  events: 4096
+  flush.min_events: 8
+  flush.timeout: 0.1s
+
 #================================ Outputs =====================================
 
 # Configure what outputs to use when sending the data collected by the beat.
@@ -164,8 +188,12 @@ processors:
 #------------------------------- Elasticsearch output ----------------------------
 output.elasticsearch:
   hosts: ["{{ elasticsearch.host }}"]
+{% if elasticsearch.pipeline %}
   pipeline: {{elasticsearch.pipeline}}
+{% endif %}
+{% if elasticsearch.index %}
   index: {{elasticsearch.index}}
+{% endif %}
 {%- elif logstash %}
 #------------------------------- Logstash output ---------------------------------
 output.logstash:
@@ -183,4 +211,9 @@ output.file:
 #================================ Paths =====================================
 path:
   data: {{path_data}}
+{% endif %}
+
+{% if keystore_path %}
+#================================ keystore =====================================
+keystore.path: {{keystore_path}}
 {% endif %}

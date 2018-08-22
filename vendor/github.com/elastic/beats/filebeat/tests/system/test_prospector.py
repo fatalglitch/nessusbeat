@@ -3,6 +3,7 @@
 from filebeat import BaseTest
 import os
 import time
+import unittest
 
 from beat.beat import Proc
 
@@ -320,10 +321,9 @@ class Test(BaseTest):
 
         filebeat = self.start_beat()
 
-        # wait until events are sent for the first time
+        # wait until first 3 scans
         self.wait_until(
-            lambda: self.log_contains(
-                "Events flushed"),
+            lambda: self.log_contains_count("Start next scan") > 3,
             max_timeout=10)
 
         testfile = self.working_dir + "/log/test.log"
@@ -612,19 +612,15 @@ class Test(BaseTest):
 
         # check that not all harvesters were started
         self.wait_until(
-            lambda: self.log_contains("Harvester limit reached"),
-            max_timeout=10)
+            lambda: self.log_contains("Harvester limit reached"))
 
-        # wait for registry to be written
-        self.wait_until(
-            lambda: self.log_contains_count("Registry file updated") > 1,
-            max_timeout=10)
+        self.wait_until(lambda: self.output_lines() > 0)
 
         # Make sure not all events were written so far
         data = self.read_output()
         assert len(data) < 3
 
-        self.wait_until(lambda: self.output_has(lines=3), max_timeout=15)
+        self.wait_until(lambda: self.output_has(lines=3))
 
         data = self.read_output()
         assert len(data) == 3
@@ -687,8 +683,7 @@ class Test(BaseTest):
         """
         self.render_config_template(
             path=os.path.abspath(self.working_dir) + "/log/**",
-            scan_frequency="1s",
-            recursive_glob=True,
+            scan_frequency="1s"
         )
 
         testfile_dir = os.path.join(self.working_dir, "log", "some", "other", "subdir")
@@ -720,7 +715,22 @@ class Test(BaseTest):
 
         filebeat.check_kill_and_wait()
 
+    def test_disable_recursive_glob(self):
+        """
+        Check that the recursive glob can be disabled from the config.
+        """
+        self.render_config_template(
+            path=os.path.abspath(self.working_dir) + "/log/**",
+            scan_frequency="1s",
+            disable_recursive_glob=True,
+        )
 
-if __name__ == '__main__':
-    import unittest
-    unittest.main()
+        testfile_dir = os.path.join(self.working_dir, "log", "some", "other", "subdir")
+        os.makedirs(testfile_dir)
+        testfile_path = os.path.join(testfile_dir, "input")
+        filebeat = self.start_beat()
+        self.wait_until(
+            lambda: self.log_contains(
+                "recursive glob disabled"),
+            max_timeout=10)
+        filebeat.check_kill_and_wait()

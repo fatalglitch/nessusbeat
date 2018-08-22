@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/elastic/beats/libbeat/common"
-	"github.com/elastic/beats/libbeat/logp"
+	"github.com/elastic/beats/libbeat/common/cfgwarn"
 	"github.com/elastic/beats/metricbeat/helper"
 	"github.com/elastic/beats/metricbeat/mb"
 	"github.com/elastic/beats/metricbeat/mb/parse"
@@ -49,13 +50,14 @@ type MetricSet struct {
 	body            string
 	requestEnabled  bool
 	responseEnabled bool
+	deDotEnabled    bool
 }
 
 // New create a new instance of the MetricSet
 // Part of new is also setting up the configuration by processing additional
 // configuration entries if needed.
 func New(base mb.BaseMetricSet) (mb.MetricSet, error) {
-	logp.Beta("The http json metricset is in beta.")
+	cfgwarn.Beta("The http json metricset is in beta.")
 
 	config := struct {
 		Namespace       string `config:"namespace" validate:"required"`
@@ -63,11 +65,13 @@ func New(base mb.BaseMetricSet) (mb.MetricSet, error) {
 		Body            string `config:"body"`
 		RequestEnabled  bool   `config:"request.enabled"`
 		ResponseEnabled bool   `config:"response.enabled"`
+		DeDotEnabled    bool   `config:"dedot.enabled"`
 	}{
 		Method:          "GET",
 		Body:            "",
 		RequestEnabled:  false,
 		ResponseEnabled: false,
+		DeDotEnabled:    false,
 	}
 
 	if err := base.Module().UnpackConfig(&config); err != nil {
@@ -86,6 +90,7 @@ func New(base mb.BaseMetricSet) (mb.MetricSet, error) {
 		http:            http,
 		requestEnabled:  config.RequestEnabled,
 		responseEnabled: config.ResponseEnabled,
+		deDotEnabled:    config.DeDotEnabled,
 	}, nil
 }
 
@@ -93,7 +98,6 @@ func New(base mb.BaseMetricSet) (mb.MetricSet, error) {
 // It returns the event which is then forward to the output. In case of an error, a
 // descriptive error must be returned.
 func (m *MetricSet) Fetch() (common.MapStr, error) {
-
 	response, err := m.http.FetchResponse()
 	if err != nil {
 		return nil, err
@@ -101,6 +105,7 @@ func (m *MetricSet) Fetch() (common.MapStr, error) {
 	defer response.Body.Close()
 
 	var jsonBody map[string]interface{}
+	var event map[string]interface{}
 
 	body, err := ioutil.ReadAll(response.Body)
 	if err != nil {
@@ -112,7 +117,11 @@ func (m *MetricSet) Fetch() (common.MapStr, error) {
 		return nil, err
 	}
 
-	event := jsonBody
+	if m.deDotEnabled {
+		event = common.DeDotJSON(jsonBody).(map[string]interface{})
+	} else {
+		event = jsonBody
+	}
 
 	if m.requestEnabled {
 		event[mb.ModuleDataKey] = common.MapStr{
@@ -125,10 +134,12 @@ func (m *MetricSet) Fetch() (common.MapStr, error) {
 	}
 
 	if m.responseEnabled {
+		phrase := strings.TrimPrefix(response.Status, strconv.Itoa(response.StatusCode)+" ")
 		event[mb.ModuleDataKey] = common.MapStr{
 			"response": common.MapStr{
-				"status_code": response.StatusCode,
-				"headers":     m.getHeaders(response.Header),
+				"code":    response.StatusCode,
+				"phrase":  phrase,
+				"headers": m.getHeaders(response.Header),
 			},
 		}
 	}
@@ -140,7 +151,6 @@ func (m *MetricSet) Fetch() (common.MapStr, error) {
 }
 
 func (m *MetricSet) getHeaders(header http.Header) map[string]string {
-
 	headers := make(map[string]string)
 	for k, v := range header {
 		value := ""

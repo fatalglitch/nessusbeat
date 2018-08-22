@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"time"
 
+	"github.com/elastic/beats/libbeat/beat"
 	"github.com/elastic/beats/libbeat/common"
 	"github.com/elastic/beats/libbeat/common/jsontransform"
 	"github.com/elastic/beats/libbeat/logp"
@@ -91,8 +93,7 @@ func createJSONError(message string) common.MapStr {
 // respecting the KeysUnderRoot and OverwriteKeys configuration options.
 // If MessageKey is defined, the Text value from the event always
 // takes precedence.
-func MergeJSONFields(data common.MapStr, jsonFields common.MapStr, text *string, config JSONConfig) {
-
+func MergeJSONFields(data common.MapStr, jsonFields common.MapStr, text *string, config JSONConfig) time.Time {
 	// The message key might have been modified by multiline
 	if len(config.MessageKey) > 0 && text != nil {
 		jsonFields[config.MessageKey] = *text
@@ -102,6 +103,23 @@ func MergeJSONFields(data common.MapStr, jsonFields common.MapStr, text *string,
 		// Delete existing json key
 		delete(data, "json")
 
-		jsontransform.WriteJSONKeys(data, jsonFields, config.OverwriteKeys)
+		var ts time.Time
+		if v, ok := data["@timestamp"]; ok {
+			switch t := v.(type) {
+			case time.Time:
+				ts = t
+			case common.Time:
+				ts = time.Time(ts)
+			}
+			delete(data, "@timestamp")
+		}
+		event := &beat.Event{
+			Timestamp: ts,
+			Fields:    data,
+		}
+		jsontransform.WriteJSONKeys(event, jsonFields, config.OverwriteKeys)
+
+		return event.Timestamp
 	}
+	return time.Time{}
 }

@@ -169,3 +169,44 @@ class Test(WriteReadTest):
         })
         self.assertTrue(len(evts), 1)
         self.assertEqual(evts[0]["message"], msg)
+
+    def test_registry_data(self):
+        """
+        eventlogging - Registry is updated
+        """
+        self.write_event_log("Hello world!")
+        evts = self.read_events()
+        self.assertTrue(len(evts), 1)
+
+        event_logs = self.read_registry()
+        self.assertTrue(len(event_logs.keys()), 1)
+        self.assertIn(self.providerName, event_logs)
+        record_number = event_logs[self.providerName]["record_number"]
+        self.assertGreater(record_number, 0)
+
+    def test_processors(self):
+        """
+        eventlogging - Processors are applied
+        """
+        self.write_event_log("Hello world!")
+
+        config = {
+            "event_logs": [
+                {
+                    "name": self.providerName,
+                    "api": self.api,
+                    "extras": {
+                        "processors": [
+                            {
+                                "drop_fields": {
+                                    "fields": ["message"],
+                                }
+                            }
+                        ],
+                    },
+                }
+            ]
+        }
+        evts = self.read_events(config)
+        self.assertTrue(len(evts), 1)
+        self.assertNotIn("message", evts[0])

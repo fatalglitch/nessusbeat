@@ -2,6 +2,7 @@ package jmx
 
 import (
 	"github.com/elastic/beats/libbeat/common"
+	"github.com/elastic/beats/libbeat/common/cfgwarn"
 	"github.com/elastic/beats/libbeat/logp"
 	"github.com/elastic/beats/metricbeat/helper"
 	"github.com/elastic/beats/metricbeat/mb"
@@ -10,7 +11,6 @@ import (
 
 var (
 	metricsetName = "jolokia.jmx"
-	logPrefix     = "[" + metricsetName + "]"
 	debugf        = logp.MakeDebug(metricsetName)
 )
 
@@ -27,7 +27,7 @@ const (
 	defaultScheme = "http"
 
 	// defaultPath is the default path to the ngx_http_stub_status_module endpoint on Nginx.
-	defaultPath = "/jolokia/?ignoreErrors=true&canonicalNaming=false"
+	defaultPath = "/jolokia/"
 )
 
 var (
@@ -48,7 +48,7 @@ type MetricSet struct {
 
 // New create a new instance of the MetricSet
 func New(base mb.BaseMetricSet) (mb.MetricSet, error) {
-	logp.Beta("The jolokia jmx metricset is beta")
+	cfgwarn.Beta("The jolokia jmx metricset is beta")
 
 	// Additional configuration options
 	config := struct {
@@ -70,8 +70,8 @@ func New(base mb.BaseMetricSet) (mb.MetricSet, error) {
 	http.SetBody(body)
 
 	if logp.IsDebug(metricsetName) {
-		debugf("%v The body for POST requests to jolokia host %v is: %v",
-			logPrefix, base.HostData().Host, string(body))
+		debugf("The body for POST requests to jolokia host %v is: %v",
+			base.HostData().Host, string(body))
 	}
 
 	return &MetricSet{
@@ -80,7 +80,6 @@ func New(base mb.BaseMetricSet) (mb.MetricSet, error) {
 		namespace:     config.Namespace,
 		http:          http,
 	}, nil
-
 }
 
 // Fetch methods implements the data gathering and data conversion to the right format
@@ -91,8 +90,8 @@ func (m *MetricSet) Fetch() (common.MapStr, error) {
 	}
 
 	if logp.IsDebug(metricsetName) {
-		debugf("%v The response body from jolokia host %v is: %v",
-			logPrefix, m.HostData().Host, string(body))
+		debugf("The response body from jolokia host %v is: %v",
+			m.HostData().Host, string(body))
 	}
 
 	event, err := eventMapping(body, m.mapping)
